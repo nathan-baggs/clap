@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 #include <vector>
 
 namespace clap
@@ -54,7 +55,27 @@ constexpr auto find_arg(std::span<const std::string_view> args, std::string_view
 
 constexpr auto format_member_as_arg(std::string_view member_name) -> std::string
 {
-    return std::format("--{}", member_name);
+    auto formatted = std::string{};
+
+    for (auto chr : member_name)
+    {
+        if (chr == '_')
+        {
+            formatted += '-';
+            continue;
+        }
+
+        if (chr >= 'A' && chr <= 'Z')
+        {
+            formatted += '-';
+            formatted += chr + 32;
+            continue;
+        }
+
+        formatted += chr;
+    }
+
+    return std::format("--{}", formatted);
 }
 
 }
