@@ -87,7 +87,7 @@ constexpr auto convert_value(std::string_view value) -> T
 }
 
 template <class T>
-    requires std::integral<T>
+    requires(std::integral<T> && !std::same_as<T, bool>)
 constexpr auto convert_value(std::string_view value) -> T
 {
     auto res = T{};
@@ -124,21 +124,29 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
         using MemberType = typename[:std::meta::type_of(member):];
 
         const auto arg_str = impl::format_member_as_arg(std::meta::identifier_of(member));
-        if (const auto arg_index = impl::try_find_arg_index(args, arg_str); arg_index)
-        {
-            if (*arg_index == std::ranges::size(args) - 1zu)
-            {
-                throw Exception("missing value for arg: {}", arg_str);
-            }
 
-            const auto arg_value = args[*arg_index + 1zu];
-            res.[:member:] = impl::convert_value<MemberType>(arg_value);
+        if constexpr (std::same_as<MemberType, bool>)
+        {
+            res.[:member:] = impl::try_find_arg_index(args, arg_str).has_value();
         }
         else
         {
-            if constexpr (!std::meta::has_default_member_initializer(member) && !impl::IsOptional<MemberType>)
+            if (const auto arg_index = impl::try_find_arg_index(args, arg_str); arg_index)
             {
-                throw Exception("missing arg: {}", arg_str);
+                if (*arg_index == std::ranges::size(args) - 1zu)
+                {
+                    throw Exception("missing value for arg: {}", arg_str);
+                }
+
+                const auto arg_value = args[*arg_index + 1zu];
+                res.[:member:] = impl::convert_value<MemberType>(arg_value);
+            }
+            else
+            {
+                if constexpr (!std::meta::has_default_member_initializer(member) && !impl::IsOptional<MemberType>)
+                {
+                    throw Exception("missing arg: {}", arg_str);
+                }
             }
         }
     }

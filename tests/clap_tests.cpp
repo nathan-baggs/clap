@@ -52,6 +52,12 @@ struct Int
     auto operator==(const Int &) const -> bool = default;
 };
 
+struct Bool
+{
+    bool enabled;
+    auto operator==(const Bool &) const -> bool = default;
+};
+
 }
 
 TEST(clap, single_string)
@@ -137,4 +143,20 @@ TEST(clap, single_int_invalid)
     ASSERT_THAT(
         [&] { clap::parse<Int>(args.size(), args.data()); },
         ::testing::ThrowsMessage<clap::Exception>(::testing::Eq("failed to convert 'hello' to integral type")));
+}
+
+TEST(clap, single_bool_present)
+{
+    const auto expected = Bool{.enabled = true};
+    const auto args = std::vector{"./program", "--enabled"};
+
+    ASSERT_EQ(clap::parse<Bool>(args.size(), args.data()), expected);
+}
+
+TEST(clap, single_bool_missing)
+{
+    const auto expected = Bool{.enabled = false};
+    const auto args = std::vector{"./program"};
+
+    ASSERT_EQ(clap::parse<Bool>(args.size(), args.data()), expected);
 }
