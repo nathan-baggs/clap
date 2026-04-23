@@ -5,6 +5,7 @@
 #include <stacktrace>
 #include <string>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "clap/clap.h"
@@ -66,7 +67,9 @@ TEST(clap, missing_arg)
     const auto expected = Args{.colour = "red"};
     const auto args = std::vector{"./program", "red"};
 
-    ASSERT_THROW(clap::parse<Args>(args.size(), args.data()), clap::Exception);
+    ASSERT_THAT(
+        [&] { clap::parse<Args>(args.size(), args.data()); },
+        ::testing::ThrowsMessage<clap::Exception>(::testing::Eq("missing arg: --colour")));
 }
 
 TEST(clap, missing_arg_value)
@@ -74,7 +77,9 @@ TEST(clap, missing_arg_value)
     const auto expected = Args{.colour = "red"};
     const auto args = std::vector{"./program", "--colour"};
 
-    ASSERT_THROW(clap::parse<Args>(args.size(), args.data()), clap::Exception);
+    ASSERT_THAT(
+        [&] { clap::parse<Args>(args.size(), args.data()); },
+        ::testing::ThrowsMessage<clap::Exception>(::testing::Eq("missing value for arg: --colour")));
 }
 
 TEST(clap, kebab_case)
@@ -129,5 +134,7 @@ TEST(clap, single_int_invalid)
 {
     const auto args = std::vector{"./program", "--number", "hello"};
 
-    ASSERT_THROW(clap::parse<Int>(args.size(), args.data()), clap::Exception);
+    ASSERT_THAT(
+        [&] { clap::parse<Int>(args.size(), args.data()); },
+        ::testing::ThrowsMessage<clap::Exception>(::testing::Eq("failed to convert 'hello' to integral type")));
 }

@@ -4,7 +4,9 @@
 #include <concepts>
 #include <exception>
 #include <format>
+#include <iterator>
 #include <meta>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <stdexcept>
@@ -43,20 +45,13 @@ constexpr auto convert_raw_args(const int argc, char const *const *argv) -> std:
            std::ranges::to<std::vector>();
 }
 
-constexpr auto find_arg(std::span<const std::string_view> args, std::string_view arg) -> std::string_view
+constexpr auto try_find_arg_index(std::span<const std::string_view> args, std::string_view arg)
+    -> std::optional<std::size_t>
 {
     const auto arg_iter = std::ranges::find(args, arg);
-    if (arg_iter == std::ranges::cend(args))
-    {
-        throw Exception("missing argument: {}", arg);
-    }
-
-    if (arg_iter == std::ranges::cend(args) - 1u)
-    {
-        throw Exception("missing value for argument: {}", arg);
-    }
-
-    return *(arg_iter + 1u);
+    return arg_iter == std::ranges::cend(args)
+               ? std::nullopt
+               : std::make_optional(std::ranges::distance(std::ranges::cbegin(args), arg_iter));
 }
 
 constexpr auto format_member_as_arg(std::string_view member_name) -> std::string
@@ -99,7 +94,7 @@ constexpr auto convert_value(std::string_view value) -> T
 
     if (const auto ec = std::from_chars(value.data(), value.data() + value.size(), res); !ec)
     {
-        throw Exception("failed to convert {} [{}]", value, std::to_underlying(ec.ec));
+        throw Exception("failed to convert '{}' to integral type", value);
     }
 
     return res;
@@ -129,17 +124,21 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
         using MemberType = typename[:std::meta::type_of(member):];
 
         const auto arg_str = impl::format_member_as_arg(std::meta::identifier_of(member));
-
-        try
+        if (const auto arg_index = impl::try_find_arg_index(args, arg_str); arg_index)
         {
-            const auto arg = impl::find_arg(args, arg_str);
-            res.[:member:] = impl::convert_value<MemberType>(arg);
+            if (*arg_index == std::ranges::size(args) - 1zu)
+            {
+                throw Exception("missing value for arg: {}", arg_str);
+            }
+
+            const auto arg_value = args[*arg_index + 1zu];
+            res.[:member:] = impl::convert_value<MemberType>(arg_value);
         }
-        catch (Exception &)
+        else
         {
             if constexpr (!std::meta::has_default_member_initializer(member) && !impl::IsOptional<MemberType>)
             {
-                throw;
+                throw Exception("missing arg: {}", arg_str);
             }
         }
     }
