@@ -123,6 +123,22 @@ struct EnvWithDefault
     auto operator==(const EnvWithDefault &) const -> bool = default;
 };
 
+struct ShortMultiple
+{
+    [[= clap::ShortName<'c'>{}]] //
+        bool counting;
+
+    [[= clap::ShortName<'a'>{}]] //
+        bool additive;
+
+    [[= clap::ShortName<'t'>{}]] //
+        bool timing;
+
+    bool other;
+
+    auto operator==(const ShortMultiple &) const -> bool = default;
+};
+
 }
 
 TEST(clap, single_string)
@@ -316,4 +332,12 @@ TEST(clap, env_override_default)
     const auto args = std::vector{"./program"};
 
     ASSERT_EQ(clap::parse<Env>(args.size(), args.data()), expected);
+}
+
+TEST(clap, combined_short_args)
+{
+    const auto expected = ShortMultiple{.counting = true, .additive = true, .timing = true, .other = false};
+    const auto args = std::vector{"./program", "-cat"};
+
+    ASSERT_EQ(clap::parse<ShortMultiple>(args.size(), args.data()), expected);
 }

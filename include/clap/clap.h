@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <charconv>
 #include <concepts>
 #include <cstddef>
@@ -59,6 +60,24 @@ constexpr auto try_find_arg_index(const std::span<const std::string_view> args, 
     return arg_iter == std::ranges::cend(args)
                ? std::nullopt
                : std::make_optional(std::ranges::distance(std::ranges::cbegin(args), arg_iter));
+}
+
+constexpr auto try_find_short_arg_index(const std::span<const std::string_view> args, const std::string_view arg)
+    -> std::optional<std::size_t>    //
+    pre(std::ranges::size(arg) == 2) //
+    pre(arg[0] == '-')
+{
+    constexpr auto is_short_arg = [](const auto a) { return std::ranges::size(a) >= 2 && a[0] == '-' && a[1] != '-'; };
+
+    for (const auto &[index, short_arg] : std::views::enumerate(args))
+    {
+        if (is_short_arg(short_arg) && std::ranges::contains(short_arg, arg[1]))
+        {
+            return index;
+        }
+    }
+
+    return std::nullopt;
 }
 
 constexpr auto format_member_as_arg(const std::string_view member_name) -> std::string //
@@ -314,8 +333,8 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
             }
         }
 
-        const auto arg_str_short_index =
-            arg_str_short.and_then([&](const auto &str) { return impl::try_find_arg_index(args, str); });
+        const auto arg_str_short_index = arg_str_short.and_then(
+            [&](const auto &short_arg) { return impl::try_find_short_arg_index(args, short_arg); });
 
         const auto arg_str_long = impl::format_member_as_arg(std::meta::identifier_of(member));
         const auto arg_str_long_index = impl::try_find_arg_index(args, arg_str_long);
@@ -335,8 +354,10 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
         if constexpr (std::same_as<MemberType, bool>)
         {
             // bool is a special case as it just represents a flag, it is inherently defaulted to false
+            // also some extra bookkeeping to handle the compressed short flags
 
-            res.[:member:] = impl::try_find_arg_index(args, arg_str).has_value();
+            res.[:member:] = arg_str_short ? !!impl::try_find_short_arg_index(args, *arg_str_short)
+                                           : !!impl::try_find_arg_index(args, arg_str);
         }
         else
         {
@@ -378,8 +399,8 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
             }
             else if (is_defaulted || is_optional)
             {
-                // if the value is defaulted or optional then it has already been handled by the default constructed res
-                // object, so just go to the next member
+                // if the value is defaulted or optional then it has already been handled by the default constructed
+                // res object, so just go to the next member
 
                 continue;
             }
