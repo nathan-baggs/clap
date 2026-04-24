@@ -64,6 +64,24 @@ struct ShortName
     auto operator==(const ShortName &) const -> bool = default;
 };
 
+// clang-format off
+struct Description
+{
+    [[= clap::Description<"first name of user">{}]] 
+    std::string first_name;
+
+    [[= clap::Description<"last name of user">{}]]
+    std::optional<std::string> last_name;
+
+    [[= clap::ShortName<'i'>{}]]
+    [[= clap::Description<"id of user">{}]] 
+    int id = -1;
+
+    [[= clap::Description<"if user is active">{}]]
+    bool active;
+};
+// clang-format on
+
 }
 
 TEST(clap, single_string)
@@ -191,4 +209,30 @@ TEST(clap, short_name_and_long_name)
     ASSERT_THAT(
         [&] { clap::parse<ShortName>(args.size(), args.data()); },
         ::testing::ThrowsMessage<clap::Exception>(::testing::Eq("cannot have both -n --number in args")));
+}
+
+TEST(clap, description)
+{
+    const auto expected = R"(./program
+
+  --first-name
+      first name of user
+      [type: string]
+
+  --last-name
+      last name of user
+      [type: string]
+      [optional]
+
+  -i, --id
+      id of user
+      [type: number]
+      [default: -1]
+
+  --active
+      if user is active
+      [type: bool])";
+    const auto args = std::vector{"./program"};
+
+    ASSERT_EQ(clap::help<Description>(args.size(), args.data()), expected);
 }

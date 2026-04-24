@@ -2,14 +2,16 @@
 
 #include <charconv>
 #include <concepts>
+#include <cstddef>
 #include <exception>
 #include <format>
 #include <iterator>
 #include <meta>
 #include <optional>
-#include <pthread.h>
 #include <ranges>
 #include <span>
+#include <sstream>
+#include <stacktrace>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -120,6 +122,45 @@ constexpr auto convert_value(const std::string_view value) -> T::value_type //
     return convert_value<typename T::value_type>(value);
 }
 
+template <std::size_t N>
+struct TemplatedString
+{
+    consteval TemplatedString(const char (&s)[N])
+    {
+        std::ranges::copy(s, str);
+    }
+
+    char str[N];
+};
+
+template <class T>
+    requires std::same_as<T, std::string>
+constexpr auto friendly_type_name() -> std::string_view
+{
+    return "string";
+}
+
+template <class T>
+    requires(std::integral<T> && !std::same_as<T, bool>)
+constexpr auto friendly_type_name() -> std::string_view
+{
+    return "number";
+}
+
+template <class T>
+    requires std::same_as<T, bool>
+constexpr auto friendly_type_name() -> std::string_view
+{
+    return "bool";
+}
+
+template <class T>
+    requires IsOptional<T>
+constexpr auto friendly_type_name() -> std::string_view
+{
+    return friendly_type_name<std::ranges::range_value_t<T>>();
+}
+
 template <class T>
 struct DebugType;
 
@@ -133,6 +174,92 @@ struct ShortName
 
 template <class T>
 concept IsShortName = std::same_as<std::remove_cvref_t<T>, ShortName<T::letter>>;
+
+template <impl::TemplatedString S>
+struct Description
+{
+    constexpr static auto templated_string()
+    {
+        return S;
+    }
+
+    constexpr static auto str() -> std::string_view
+    {
+        return {S.str};
+    }
+};
+
+template <class T>
+concept IsDescription = std::same_as<std::remove_cvref_t<T>, Description<T::templated_string()>>;
+
+template <class T>
+    requires std::is_default_constructible_v<T>
+constexpr auto help(int argc, char const *const *argv) -> std::string //
+    pre(argc > 0)
+{
+    auto strm = std::stringstream{};
+
+    strm << argv[0] << "\n\n";
+
+    auto required = std::vector<std::string>{};
+    auto optional = std::vector<std::string>{};
+    auto flags = std::vector<std::string>{};
+
+    constexpr auto ctx = std::meta::access_context::current();
+
+    template for (constexpr auto member : std::define_static_array(std::meta::nonstatic_data_members_of(^^T, ctx)))
+    {
+        using MemberType = typename[:std::meta::type_of(member):];
+
+        auto arg_str_short = std::optional<std::string>{};
+        auto description = std::optional<std::string_view>{};
+
+        template for (constexpr auto annotation : std::define_static_array(std::meta::annotations_of(member)))
+        {
+            using AnnotationType = typename[:std::meta::type_of(annotation):];
+
+            if constexpr (IsShortName<AnnotationType>)
+            {
+                constexpr auto letter = AnnotationType::letter;
+
+                if (!!arg_str_short)
+                {
+                    throw Exception("cannot have multiple ShortName annotations");
+                }
+
+                arg_str_short = std::format("-{}", letter);
+            }
+
+            if constexpr (IsDescription<AnnotationType>)
+            {
+                description = AnnotationType::str();
+            }
+        }
+
+        const auto arg_str_long = impl::format_member_as_arg(std::meta::identifier_of(member));
+
+        strm
+            << (arg_str_short ? std::format("  {}, {}", *arg_str_short, arg_str_long)
+                              : std::format("  {}", arg_str_long));
+        strm << std::format("\n      {}", description.value_or(""));
+        strm << std::format("\n      [type: {}]", impl::friendly_type_name<MemberType>());
+
+        if constexpr (impl::IsOptional<MemberType>)
+        {
+            strm << "\n      [optional]";
+        }
+
+        if constexpr (std::meta::has_default_member_initializer(member))
+        {
+            strm << std::format("\n      [default: {}]", T{}.[:member:]);
+        }
+
+        strm << "\n\n";
+    }
+
+    const auto help_message = strm.str();
+    return help_message.substr(0zu, std::ranges::size(help_message) - 2zu);
+}
 
 template <class T>
     requires std::is_default_constructible_v<T>
@@ -213,5 +340,4 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
 
     return res;
 }
-
 }

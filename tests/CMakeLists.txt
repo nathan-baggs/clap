@@ -32,3 +32,28 @@ target_compile_options(unit_tests PRIVATE
 
 target_link_libraries(unit_tests gmock_main clap::clap)
 gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(simple
+  simple.cpp
+)
+
+target_compile_options(simple PRIVATE
+  -Wall
+  -Wextra
+  -pedantic
+  -Werror
+  -Wconversion-null
+  -Wmissing-declarations
+  -Woverlength-strings
+  -Wpointer-arith
+  -Wunused-local-typedefs
+  -Wunused-result
+  -Wvarargs
+  -Wvla
+  -Wwrite-strings
+  -Wno-missing-declarations
+)
+
+target_link_libraries(simple clap::clap)
+
+
