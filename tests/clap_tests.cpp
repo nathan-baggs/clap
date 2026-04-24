@@ -19,6 +19,31 @@ void handle_contract_violation(std::contracts::contract_violation cv)
 
 namespace
 {
+
+struct AutoEnv
+{
+    AutoEnv(std::string env, const std::string &value)
+        : env{std::move(env)}
+    {
+#if defined(_WIN32)
+        ::_putenv_s(this->env.c_str(), value.c_str());
+#else
+        ::setenv(env.c_str(), value.c_str(), 1);
+#endif
+    }
+
+    ~AutoEnv()
+    {
+#if defined(_WIN32)
+        ::_putenv_s(env.c_str(), "");
+#else
+        ::unsetenv(env.c_str());
+#endif
+    }
+
+    std::string env;
+};
+
 struct Args
 {
     std::string colour;
@@ -81,6 +106,22 @@ struct Description
     bool active;
 };
 // clang-format on
+
+struct Env
+{
+    [[= clap::Env<"CLAP_TEST_PORT">{}]] //
+        std::uint16_t port;
+
+    auto operator==(const Env &) const -> bool = default;
+};
+
+struct EnvWithDefault
+{
+    [[= clap::Env<"CLAP_TEST_PORT">{}]] //
+        std::uint16_t port = 8000;
+
+    auto operator==(const EnvWithDefault &) const -> bool = default;
+};
 
 }
 
@@ -235,4 +276,44 @@ TEST(clap, description)
     const auto args = std::vector{"./program"};
 
     ASSERT_EQ(clap::help<Description>(args.size(), args.data()), expected);
+}
+
+TEST(clap, env_default)
+{
+    const auto auto_env = AutoEnv{"CLAP_TEST_PORT", "1234"};
+
+    const auto expected = Env{.port = 1234};
+    const auto args = std::vector{"./program"};
+
+    ASSERT_EQ(clap::parse<Env>(args.size(), args.data()), expected);
+}
+
+TEST(clap, env_value_override)
+{
+    const auto auto_env = AutoEnv{"CLAP_TEST_PORT", "1234"};
+
+    const auto expected = Env{.port = 4321};
+    const auto args = std::vector{"./program", "--port", "4321"};
+
+    ASSERT_EQ(clap::parse<Env>(args.size(), args.data()), expected);
+}
+
+TEST(clap, env_value_error_missing_env)
+{
+    const auto args = std::vector{"./program"};
+
+    ASSERT_THAT(
+        [&] { clap::parse<Env>(args.size(), args.data()); },
+        ::testing::ThrowsMessage<clap::Exception>(
+            ::testing::Eq("missing arg: --port (and not in env CLAP_TEST_PORT)")));
+}
+
+TEST(clap, env_override_default)
+{
+    const auto auto_env = AutoEnv{"CLAP_TEST_PORT", "1234"};
+
+    const auto expected = Env{.port = 1234};
+    const auto args = std::vector{"./program"};
+
+    ASSERT_EQ(clap::parse<Env>(args.size(), args.data()), expected);
 }

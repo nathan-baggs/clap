@@ -3,9 +3,11 @@
 #include <charconv>
 #include <concepts>
 #include <cstddef>
+#include <cstdlib>
 #include <exception>
 #include <format>
 #include <iterator>
+#include <memoryapi.h>
 #include <meta>
 #include <optional>
 #include <ranges>
@@ -161,6 +163,20 @@ constexpr auto friendly_type_name() -> std::string_view
     return friendly_type_name<std::ranges::range_value_t<T>>();
 }
 
+template <impl::TemplatedString S>
+struct TextAnnotation
+{
+    constexpr static auto templated_string()
+    {
+        return S;
+    }
+
+    constexpr static auto str() -> std::string_view
+    {
+        return {S.str};
+    }
+};
+
 template <class T>
 struct DebugType;
 
@@ -176,21 +192,20 @@ template <class T>
 concept IsShortName = std::same_as<std::remove_cvref_t<T>, ShortName<T::letter>>;
 
 template <impl::TemplatedString S>
-struct Description
+struct Description : impl::TextAnnotation<S>
 {
-    constexpr static auto templated_string()
-    {
-        return S;
-    }
-
-    constexpr static auto str() -> std::string_view
-    {
-        return {S.str};
-    }
 };
 
 template <class T>
 concept IsDescription = std::same_as<std::remove_cvref_t<T>, Description<T::templated_string()>>;
+
+template <impl::TemplatedString S>
+struct Env : impl::TextAnnotation<S>
+{
+};
+
+template <class T>
+concept IsEnv = std::same_as<std::remove_cvref_t<T>, Env<T::templated_string()>>;
 
 template <class T>
     requires std::is_default_constructible_v<T>
@@ -276,6 +291,7 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
         using MemberType = typename[:std::meta::type_of(member):];
 
         auto arg_str_short = std::optional<std::string>{};
+        auto env_name = std::optional<std::string>{};
 
         template for (constexpr auto annotation : std::define_static_array(std::meta::annotations_of(member)))
         {
@@ -291,6 +307,10 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
                 }
 
                 arg_str_short = std::format("-{}", letter);
+            }
+            else if constexpr (IsEnv<AnnotationType>)
+            {
+                env_name = std::string{AnnotationType::str()};
             }
         }
 
@@ -314,12 +334,27 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
 
         if constexpr (std::same_as<MemberType, bool>)
         {
+            // bool is a special case as it just represents a flag, it is inherently defaulted to false
+
             res.[:member:] = impl::try_find_arg_index(args, arg_str).has_value();
         }
         else
         {
-            if (const auto arg_index = impl::try_find_arg_index(args, arg_str); arg_index)
+            const auto arg_index = impl::try_find_arg_index(args, arg_str);
+
+            const auto is_in_args = !!arg_index;
+            const auto is_backed_by_env = !!env_name;
+            constexpr auto is_defaulted = std::meta::has_default_member_initializer(member);
+            constexpr auto is_optional = impl::IsOptional<MemberType>;
+
+            if (is_defaulted && is_optional)
             {
+                throw Exception("cannot have defaulted and optional arg: {}", arg_str);
+            }
+            else if (is_in_args)
+            {
+                // providing an arg should have the highest precedence, so try and parse it
+
                 if (*arg_index == std::ranges::size(args) - 1zu)
                 {
                     throw Exception("missing value for arg: {}", arg_str);
@@ -328,12 +363,29 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
                 const auto arg_value = args[*arg_index + 1zu];
                 res.[:member:] = impl::convert_value<MemberType>(arg_value);
             }
+            else if (is_backed_by_env)
+            {
+                // if there was no arg but it can be backed by and env var then try and find it
+
+                if (const auto *env_value = std::getenv(env_name->c_str()); env_value)
+                {
+                    res.[:member:] = impl::convert_value<MemberType>(env_value);
+                }
+                else
+                {
+                    throw Exception("missing arg: {} (and not in env {})", arg_str, *env_name);
+                }
+            }
+            else if (is_defaulted || is_optional)
+            {
+                // if the value is defaulted or optional then it has already been handled by the default constructed res
+                // object, so just go to the next member
+
+                continue;
+            }
             else
             {
-                if constexpr (!std::meta::has_default_member_initializer(member) && !impl::IsOptional<MemberType>)
-                {
-                    throw Exception("missing arg: {}", arg_str);
-                }
+                throw Exception("missing arg: {}", arg_str);
             }
         }
     }
