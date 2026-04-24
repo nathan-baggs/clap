@@ -312,6 +312,7 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
         auto arg_str_short = std::optional<std::string>{};
         auto env_name = std::optional<std::string>{};
 
+        // parse all the annotations and pull out anything useful
         template for (constexpr auto annotation : std::define_static_array(std::meta::annotations_of(member)))
         {
             using AnnotationType = typename[:std::meta::type_of(annotation):];
@@ -332,6 +333,8 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
                 env_name = std::string{AnnotationType::str()};
             }
         }
+
+        // chuff for handling short and long args
 
         const auto arg_str_short_index = arg_str_short.and_then(
             [&](const auto &short_arg) { return impl::try_find_short_arg_index(args, short_arg); });
