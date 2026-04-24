@@ -8,16 +8,16 @@ A modern C++26 tool for parsing command line arguments using reflection
 struct Args
 {
     std::string first_name;
-    std::string last_name;
+    int age;
     bool active;
 };
 
-// ./program --first-name John --last-name Smith --active
+// ./program --first-name John --age 99 --active
 
 const auto args = clap::parse<Args>(argc, argv);
 
 assert(args.first_name == "John");
-assert(args.last_name == "Smith");
+assert(args.age == 99);
 assert(args.active);
 ```
 
