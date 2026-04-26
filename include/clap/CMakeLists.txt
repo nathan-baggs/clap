@@ -1,6 +1,18 @@
 add_library(clap INTERFACE)
 add_library(clap::clap ALIAS clap)
 
+if(CLAP_BUILD_MODULES)
+        if(CMAKE_VERSION VERSION_LESS 3.28)
+                message(FATAL_ERROR "CLAP_BUILD_MODULES requires CMake 3.28 or newer for CXX_MODULES file sets")
+        endif()
+
+        target_sources(clap INTERFACE
+                FILE_SET modules TYPE CXX_MODULES
+                BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+                FILES ${CMAKE_CURRENT_SOURCE_DIR}/clap.cppm
+        )
+endif()
+
 target_include_directories(clap INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -16,10 +28,17 @@ target_link_libraries(clap INTERFACE stdc++exp)
 
 include(GNUInstallDirs)
 
-install(TARGETS clap EXPORT clapTargets)
+if(CLAP_BUILD_MODULES)
+  install(TARGETS clap
+          EXPORT clapTargets
+          FILE_SET modules DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clap)
+else()
+  install(TARGETS clap EXPORT clapTargets)
+endif()
+
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.cppm")
 
 install(EXPORT clapTargets
         NAMESPACE clap::

@@ -7,16 +7,18 @@ A modern C++26 tool for parsing command line arguments using reflection
 ### Basic usage
 
 ```cpp
+using std::string;
+
 struct Args
 {
-    std::string first_name;
+    string first_name;
     int age;
     bool active;
 };
 
 // ./program --first-name John --age 99 --active
 
-const auto args = clap::parse<Args>(argc, argv);
+const Args args = clap::parse<Args>(argc, argv);
 
 assert(args.first_name == "John");
 assert(args.age == 99);
@@ -30,33 +32,40 @@ assert(args.active);
 - Short arguments
 - Env var backing
 - Combined short name (flags only)
+- C++ modules support
 
 ```cpp
+using std::optional;
+using std::string;
+
+using clap::Env;
+using clap::ShortName;
+
 struct Args
 {
-    std::string host = "localhost";
+    string host = "localhost";
 
-    [[=clap::ShortName<'p'>{}]]
-    std::uint16_t port;
+    [[=ShortName<'p'>{}]]
+    uint16_t port;
 
-    [[=clap::Env<"RETRY_COUNT">{}]]
-    std::uint32_t retry_count;
+    [[=Env<"RETRY_COUNT">{}]]
+    uint32_t retry_count;
 
-    std::optional<std::string> log_file;
+    optional<string> log_file;
 
-    [[=clap::ShortName<'e'>{}]]
+    [[=ShortName<'e'>{}]]
     bool encrypted;
 
-    [[=clap::ShortName<'c'>{}]]
+    [[=ShortName<'c'>{}]]
     bool compressed;
 
-    [[=clap::ShortName<'h'>{}]]
+    [[=ShortName<'h'>{}]]
     bool hashed;
 };
 
 // ./program -p 8080 -ec
 
-const auto args = clap::parse<Args>(argc, argv);
+const Args args = clap::parse<Args>(argc, argv);
 
 assert(args.host == "localhost");
 assert(args.port == 8080);
@@ -72,19 +81,25 @@ assert(!args.hashed);
 Also supported are annotations for adding descriptions to fields, these can then be converted to a help message
 
 ```cpp
+using std::optional;
+using std::string;
+
+using clap::Description;
+using clap::ShortName;
+
 struct Args
 {
-    [[= clap::Description<"first name of user">{}]] 
-    std::string first_name;
+    [[=Description<"first name of user">{}]] 
+    string first_name;
 
-    [[= clap::Description<"last name of user">{}]]
-    std::optional<std::string> last_name;
+    [[=Description<"last name of user">{}]]
+    optional<string> last_name;
 
-    [[= clap::ShortName<'i'>{}]]
-    [[= clap::Description<"id of user">{}]] 
+    [[=ShortName<'i'>{}]]
+    [[=Description<"id of user">{}]] 
     int id = -1;
 
-    [[= clap::Description<"if user is active">{}]]
+    [[=Description<"if user is active">{}]]
     bool active;
 };
 
@@ -116,11 +131,13 @@ std::println("{}", clap::help<Args>(argc, argv));
 clap will heuristically try and kebaberise all members
 
 ```cpp
+using std::string;
+
 struct Args
 {
-    std::string snake_case;
-    std::string camelCase;
-    std::string PascalCase;
+    string snake_case;
+    string camelCase;
+    string PascalCase;
 };
 
 // ./program --snake-case a --camel-case b --pascal-case c

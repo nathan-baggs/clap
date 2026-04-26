@@ -21,6 +21,8 @@ if(CLAP_BUILD_EXAMPLES)
   endif()
 endif()
 
+option(CLAP_BUILD_MODULES "Build C++ module interface" OFF)
+
 option(CLAP_BUILD_TESTS "Build unit tests" ON)
 if(CLAP_BUILD_TESTS)
   enable_testing()
