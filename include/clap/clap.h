@@ -357,8 +357,8 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
             // bool is a special case as it just represents a flag, it is inherently defaulted to false
             // also some extra bookkeeping to handle the compressed short flags
 
-            res.[:member:] = arg_str_short ? !!impl::try_find_short_arg_index(args, *arg_str_short)
-                                           : !!impl::try_find_arg_index(args, arg_str);
+            res.[:member:] = (arg_str_short && !!impl::try_find_short_arg_index(args, *arg_str_short)) ||
+                             !!impl::try_find_arg_index(args, arg_str);
         }
         else
         {
