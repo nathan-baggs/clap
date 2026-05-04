@@ -350,11 +350,6 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
             throw Exception("cannot have both {} {} in args", args[*arg_str_short_index], args[*arg_str_long_index]);
         }
 
-        if (!!arg_str_short && !arg_str_short_index)
-        {
-            throw Exception("missing arg: {}", *arg_str_short);
-        }
-
         const auto arg_str = arg_str_short_index ? std::string{args[*arg_str_short_index]} : arg_str_long;
 
         if constexpr (std::same_as<MemberType, bool>)
@@ -362,8 +357,8 @@ constexpr auto parse(int argc, char const *const *argv) -> T //
             // bool is a special case as it just represents a flag, it is inherently defaulted to false
             // also some extra bookkeeping to handle the compressed short flags
 
-            res.[:member:] = arg_str_short ? !!impl::try_find_short_arg_index(args, *arg_str_short)
-                                           : !!impl::try_find_arg_index(args, arg_str);
+            res.[:member:] = (arg_str_short && !!impl::try_find_short_arg_index(args, *arg_str_short)) ||
+                             !!impl::try_find_arg_index(args, arg_str);
         }
         else
         {
